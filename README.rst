@@ -15,6 +15,15 @@ Dependencies
 1. Python 2.x (I didn't have time to reconcile the need to get byte offsets
    with the need for Unicode strings in Python 3.x's shlex.)
 
+TODO
+====
+
+1. Use header detection to give the extracted files extensions rather than
+   just assuming that makeself used gzip to compress its tarball.
+2. If nothing else, check if any "excess cruft" has a Zip header so MojoSetup
+   files have their game data bundles extracted with the right extensions
+   rather than ``.bin`` as a placeholder.
+
 Ideas
 =====
 
