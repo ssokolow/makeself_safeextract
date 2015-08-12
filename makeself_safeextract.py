@@ -15,7 +15,7 @@ __appname__ = "[application name here]"
 __version__ = "0.0pre0"
 __license__ = "GNU GPL 3.0 or later"
 
-import logging, shlex, subprocess, os
+import logging, os, shlex, subprocess, zipfile
 log = logging.getLogger(__name__)
 
 # -- Code Here --
@@ -95,26 +95,36 @@ def get_offsets(path):
             prev_offset = offsets[-1][1]
         return offsets
 
-def split_archive(path, offsets, target):
+def split_archive(path, offsets, target, mojo=False):
     """Given a list of offsets, extract data hunks from a makeself file."""
     with open(path, 'rb') as fobj:
+        results = []
         hunk_num = 1
-        for offset, size in offsets:
-            log.info("Unpacking %s byte file at offset %s", size, offset)
-            # TODO: Extract to a temporary path and header detect filetype
-            tgt_path = os.path.join(target, '%s.tgz' % (hunk_num))
-            with open(tgt_path, 'wb') as oobj:
-                fobj.seek(offset)
-                oobj.write(fobj.read(size))
-            hunk_num += 1
-
         end_offset = sum(offsets[-1])
-        if os.stat(path).st_size > end_offset:
-            log.info("Detected extra data at end of file. Dumping...")
+        end_size = os.stat(path).st_size - end_offset
+
+        if mojo:
+            tgt_path = target
+        else:
+            for offset, size in offsets:
+                log.info("Unpacking %s byte file at offset %s", size, offset)
+                # TODO: Extract to a temporary path and header detect filetype
+                tgt_path = os.path.join(target, '%s.tgz' % (hunk_num))
+                with open(tgt_path, 'wb') as oobj:
+                    fobj.seek(offset)
+                    oobj.write(fobj.read(size))
+                results.append(tgt_path)
+                hunk_num += 1
             tgt_path = os.path.join(target, '%s.bin' % (hunk_num))
+
+        if end_size:
+            log.info("Found extra data after tarball (MojoSetup content?)")
             with open(tgt_path, 'wb') as oobj:
                 fobj.seek(end_offset)
                 oobj.write(fobj.read())
+            results.append(tgt_path)
+
+        return [results]
 
 def main():
     """The main entry point, compatible with setuptools entry points."""
@@ -129,9 +139,12 @@ def main():
         default=0, help="Decrease the verbosity. Use twice for extra effect")
     parser.add_argument('-o', '--outdir', default=os.getcwd(),
         help="The target directory to unpack to")
+    parser.add_argument('--mojo', action="store_true", default=False,
+        help="Assume the file is a MojoSetup installer and call p7zip or "
+        "unzip to unpack only the application data.")
     parser.add_argument('--no-containing-folder', action="store_true",
         default=False, help="Don't create a containing folder named after each"
-        "source archive.")
+        " source archive.")
     parser.add_argument('files', nargs='+')
     # Reminder: %(default)s can be used in help strings.
 
@@ -157,7 +170,30 @@ def main():
         else:
             os.makedirs(target)
 
-        split_archive(path, offsets, target)
+        if args.mojo:
+            zippath = target + '.zip'
+            split_archive(path, offsets, zippath, mojo=True)
+
+            if not zipfile.is_zipfile(zippath):
+                log.warning("Not a clean Zip file: %s", zippath)
+
+            # Fallback chain to ensure the best possible chance of success
+            # (7zip is most versatile, unzip is safer than pre-2.7.4 Python
+            #  zipfile module in the presence of absolute content paths)
+            try:
+                subprocess.check_call(['7z', 'x', zippath], cwd=target)
+            except OSError:
+                try:
+                    subprocess.check_call(['unzip', zippath], cwd=target)
+                except OSError:
+                    zobj = zipfile.ZipFile(zippath)
+                    zobj.extractall(target)
+
+            # If we didn't die with subprocess.CalledProcessError, or
+            # zipfile.BadZipFile, remove the temporary zip file.
+            os.remove(zippath)
+        else:
+            split_archive(path, offsets, target, mojo=False)
 
 if __name__ == '__main__':
     main()
