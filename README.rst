@@ -35,10 +35,9 @@ TODO
 ====
 
 1. Use header detection to give the extracted files extensions rather than
-   just assuming that makeself used gzip to compress its tarball.
-2. If nothing else, check if any "excess cruft" has a Zip header so MojoSetup
-   files have their game data bundles extracted with the right extensions
-   rather than ``.bin`` as a placeholder.
+   just assuming that makeself used gzip to compress its tarball and that
+   any "cruft" following the makeself-expected content is either a Zip file
+   or unknown binary data.
 
 Ideas
 =====

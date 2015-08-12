@@ -122,6 +122,10 @@ def split_archive(path, offsets, target, mojo=False):
             with open(tgt_path, 'wb') as oobj:
                 fobj.seek(end_offset)
                 oobj.write(fobj.read())
+            if zipfile.is_zipfile(tgt_path):
+                new_tgt = os.path.splitext(tgt_path)[0] + '.zip'
+                os.rename(tgt_path, new_tgt)
+                tgt_path = new_tgt
             results.append(tgt_path)
 
         return [results]
