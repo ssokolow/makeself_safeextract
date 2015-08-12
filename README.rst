@@ -31,6 +31,8 @@ MojoSetup installer and:
 
 See the ``--help`` output for more advanced usage.
 
+(And see lgog_grab.sh for a proof-of-concept wrapper script using this.)
+
 TODO
 ====
 
