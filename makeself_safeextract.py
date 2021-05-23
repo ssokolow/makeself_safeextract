@@ -95,6 +95,16 @@ def get_offsets(path):
             prev_offset = offsets[-1][1]
         return offsets
 
+def write_to_file(in_fobj, out_path, offset, size=None):
+    """Writes bytes size bytes starting at offset from in_fobj (file object) to file
+       at out_path (string)"""
+    if size is None:
+        size = -1
+
+    with open(out_path, 'wb') as oobj:
+        in_fobj.seek(offset)
+        oobj.write(in_fobj.read(size))
+
 def split_archive(path, offsets, target, mojo=False):
     """Given a list of offsets, extract data hunks from a makeself file."""
     with open(path, 'rb') as fobj:
@@ -110,18 +120,14 @@ def split_archive(path, offsets, target, mojo=False):
                 log.info("Unpacking %s byte file at offset %s", size, offset)
                 # TODO: Extract to a temporary path and header detect filetype
                 tgt_path = os.path.join(target, '%s.tgz' % (hunk_num))
-                with open(tgt_path, 'wb') as oobj:
-                    fobj.seek(offset)
-                    oobj.write(fobj.read(size))
                 results.append(tgt_path)
+                write_to_file(fobj, tgt_path, offset, size)
                 hunk_num += 1
             tgt_path = os.path.join(target, '%s.bin' % (hunk_num))
 
         if end_size:
             log.info("Found extra data after tarball (MojoSetup content?)")
-            with open(tgt_path, 'wb') as oobj:
-                fobj.seek(end_offset)
-                oobj.write(fobj.read())
+            write_to_file(fobj, tgt_path, end_offset)
             if zipfile.is_zipfile(tgt_path):
                 new_tgt = os.path.splitext(tgt_path)[0] + '.zip'
                 os.rename(tgt_path, new_tgt)
