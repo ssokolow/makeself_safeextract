@@ -95,15 +95,32 @@ def get_offsets(path):
             prev_offset = offsets[-1][1]
         return offsets
 
+def read_in_chunks(file_object, offset, size=None, chunk_size=1024*1024):
+    """Lazy function (generator) to read a file piece by piece.
+    Default chunk size: 1 MiB. Based on code from:
+    https://stackoverflow.com/questions/519633/lazy-method-for-reading-big-file-in-python
+    """
+    file_object.seek(offset)
+    remaining = None if size is None else size
+
+    while True:
+        if remaining is None:
+            this_chunk_size = chunk_size
+        else:
+            this_chunk_size = remaining if remaining < chunk_size else chunk_size
+            remaining -= this_chunk_size
+
+        data = file_object.read(this_chunk_size)
+        if not data:
+            break
+        yield data
+
 def write_to_file(in_fobj, out_path, offset, size=None):
     """Writes bytes size bytes starting at offset from in_fobj (file object) to file
        at out_path (string)"""
-    if size is None:
-        size = -1
-
     with open(out_path, 'wb') as oobj:
-        in_fobj.seek(offset)
-        oobj.write(in_fobj.read(size))
+        for chunk in read_in_chunks(in_fobj, offset, size):
+            oobj.write(chunk)
 
 def split_archive(path, offsets, target, mojo=False):
     """Given a list of offsets, extract data hunks from a makeself file."""
