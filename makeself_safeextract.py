@@ -11,6 +11,11 @@ from __future__ import (absolute_import, division, print_function,
                         with_statement, unicode_literals)
 
 __author__ = "Stephan Sokolow (deitarion/SSokolow)"
+__authors__ = [
+    "Stephan Sokolow (deitarion/SSokolow)",
+    "Thiago Jung Bauermann",
+]
+__author__ = ', '.join(__authors__)
 __appname__ = "[application name here]"
 __version__ = "0.0pre0"
 __license__ = "GNU GPL 3.0 or later"
@@ -95,6 +100,33 @@ def get_offsets(path):
             prev_offset = offsets[-1][1]
         return offsets
 
+def read_in_chunks(file_object, offset, size=None, chunk_size=1024*1024):
+    """Lazy function (generator) to read a file piece by piece.
+    Default chunk size: 1 MiB. Based on code from:
+    https://stackoverflow.com/questions/519633/lazy-method-for-reading-big-file-in-python
+    """
+    file_object.seek(offset)
+    remaining = None if size is None else size
+
+    while True:
+        if remaining is None:
+            this_chunk_size = chunk_size
+        else:
+            this_chunk_size = remaining if remaining < chunk_size else chunk_size
+            remaining -= this_chunk_size
+
+        data = file_object.read(this_chunk_size)
+        if not data:
+            break
+        yield data
+
+def write_to_file(in_fobj, out_path, offset, size=None):
+    """Writes bytes size bytes starting at offset from in_fobj (file object) to file
+       at out_path (string)"""
+    with open(out_path, 'wb') as oobj:
+        for chunk in read_in_chunks(in_fobj, offset, size):
+            oobj.write(chunk)
+
 def split_archive(path, offsets, target, mojo=False):
     """Given a list of offsets, extract data hunks from a makeself file."""
     with open(path, 'rb') as fobj:
@@ -110,18 +142,14 @@ def split_archive(path, offsets, target, mojo=False):
                 log.info("Unpacking %s byte file at offset %s", size, offset)
                 # TODO: Extract to a temporary path and header detect filetype
                 tgt_path = os.path.join(target, '%s.tgz' % (hunk_num))
-                with open(tgt_path, 'wb') as oobj:
-                    fobj.seek(offset)
-                    oobj.write(fobj.read(size))
                 results.append(tgt_path)
+                write_to_file(fobj, tgt_path, offset, size)
                 hunk_num += 1
             tgt_path = os.path.join(target, '%s.bin' % (hunk_num))
 
         if end_size:
             log.info("Found extra data after tarball (MojoSetup content?)")
-            with open(tgt_path, 'wb') as oobj:
-                fobj.seek(end_offset)
-                oobj.write(fobj.read())
+            write_to_file(fobj, tgt_path, end_offset)
             if zipfile.is_zipfile(tgt_path):
                 new_tgt = os.path.splitext(tgt_path)[0] + '.zip'
                 os.rename(tgt_path, new_tgt)
